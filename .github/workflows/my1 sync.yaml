@@ -1,0 +1,83 @@
+name: my1_Sync Fork
+
+# 需要填写变量 ORIGINAL_OWNER ORIGINAL_REPOSITORY UPSTREAM_BRANCH MY_BRANCH
+# 需要创建环境变量 MYGITHUB_TOKEN MYGITHUB_USERNAME
+env:
+  ORIGINAL_OWNER: jacopotediosi
+  ORIGINAL_REPOSITORY: GAppsMod
+  UPSTREAM_BRANCH: main
+  MY_BRANCH: main
+
+on:
+  workflow_dispatch:
+  repository_dispatch:
+    types: [1]
+  schedule:
+    - cron: '*/30 * * * *'
+
+jobs:
+  sync-fork:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Use Node.js 16
+      uses: actions/setup-node@v2
+      with:
+        node-version: 16
+
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Fetch Upstream
+      run: |
+        echo "更新前："
+        tree .github -a 
+        git remote add upstream https://github.com/${{ env.ORIGINAL_OWNER }}/${{ env.ORIGINAL_REPOSITORY }}.git
+        git fetch upstream
+        echo "git checkout ${{ env.MY_BRANCH }}"
+        cp -fr .github/workflows/my1*.yaml /tmp/
+        git reset --hard upstream/${{ env.UPSTREAM_BRANCH }}
+        if [ -d ".github" ]; then
+            mv .github ${{ env.ORIGINAL_REPOSITORY }}.github
+        else
+            mkdir .github
+        fi
+        echo "git reset --hard upstream：后"
+        mkdir -p .github/workflows/
+        rm -fr .github > /dev/null
+        mkdir -p .github/workflows/
+        tree .github -a 
+        cp -fr /tmp/my1*.yaml .github/workflows/
+        echo "复制后，准备进入 - name: Push Changes"
+        tree .github -a 
+
+    - name: set git
+      run: |
+        echo "用户名是" ${{ secrets.GITHUB_USERNAME }}
+        echo "密码是"${{ secrets.GITHUB_TOKEN }}
+        echo "protocol=https\nhost=github.com\nusername=${{ secrets.MYGITHUB_USERNAME }}\npassword=${{ secrets.MYGITHUB_TOKEN }}" | git credential approve
+        git config --global user.name "BOT"
+        git config --global user.email "BOT@github.com"
+
+    - name: Push
+      # uses: ad-m/github-push-action@master
+      # with:
+      #   github_token: ${{ secrets.MYGITHUB_TOKEN }}
+      #   branch: ${{ env.MY_BRANCH }}
+      #   force: true
+      run: |
+        git add .
+        git commit -m "BOT SYNC"
+        git push -u -f origin ${{ env.MY_BRANCH }}
+
+    - name : 占位
+      run: |
+        echo "占位"
+
+    - name: Check if Push Failed
+      run: |
+        if [[ "${{ steps.Push.outcome }}" == "failure" ]]; then
+          echo "抱歉失败退出了"
+          exit 1
+        fi
